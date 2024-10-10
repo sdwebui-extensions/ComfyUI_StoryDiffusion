@@ -37,6 +37,7 @@ from comfy.clip_vision import load as clip_load
 
 cur_path = os.path.dirname(os.path.abspath(__file__))
 photomaker_dir=os.path.join(folder_paths.models_dir, "photomaker")
+cache_photomaker_dir="/stable-diffusion-cache/models/photomaker"
 base_pt = os.path.join(photomaker_dir,"pt")
 device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 
@@ -176,18 +177,24 @@ def pre_checkpoint(photomaker_path, photomake_mode, kolor_face, pulid, story_mak
                    model_type):
     if photomake_mode == "v1":
         if not os.path.exists(photomaker_path):
-            photomaker_path = hf_hub_download(
-                repo_id="TencentARC/PhotoMaker",
-                filename="photomaker-v1.bin",
-                local_dir=photomaker_dir,
-            )
+            if os.path.exists(cache_photomaker_dir):
+                photomaker_path = os.path.join(cache_photomaker_dir, "photomaker-v1.bin")
+            else:
+                photomaker_path = hf_hub_download(
+                    repo_id="TencentARC/PhotoMaker",
+                    filename="photomaker-v1.bin",
+                    local_dir=photomaker_dir,
+                )
     else:
         if not os.path.exists(photomaker_path):
-            photomaker_path = hf_hub_download(
-                repo_id="TencentARC/PhotoMaker-V2",
-                filename="photomaker-v2.bin",
-                local_dir=photomaker_dir,
-            )
+            if os.path.exists(cache_photomaker_dir):
+                photomaker_path = os.path.join(cache_photomaker_dir, "photomaker-v2.bin")
+            else:
+                photomaker_path = hf_hub_download(
+                    repo_id="TencentARC/PhotoMaker-V2",
+                    filename="photomaker-v2.bin",
+                    local_dir=photomaker_dir,
+                )
     if kolor_face:
         face_ckpt = os.path.join(photomaker_dir, "ipa-faceid-plus.bin")
         if not os.path.exists(face_ckpt):
