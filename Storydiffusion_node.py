@@ -7,39 +7,17 @@ import numpy as np
 import torch
 import os
 from PIL import ImageFont,Image
-from diffusers import StableDiffusionXLPipeline, DiffusionPipeline,EulerDiscreteScheduler, UNet2DConditionModel,UniPCMultistepScheduler, AutoencoderKL
-from transformers import CLIPVisionModelWithProjection
-from transformers import CLIPImageProcessor
 import datetime
 import folder_paths
 from comfy.clip_vision import load as clip_load
 from comfy.model_management import total_vram
 
-from .utils.utils import get_comic
-from .utils.load_models_utils import load_models
-from .model_loader_utils import  (story_maker_loader,kolor_loader,phi2narry,
-                                  extract_content_from_brackets,narry_list,remove_punctuation_from_strings,phi_list,center_crop_s,center_crop,
-                                  narry_list_pil,setup_seed,find_directories,
-                                  apply_style,get_scheduler,apply_style_positive,SD35Wrapper,load_images_list,
-                                  nomarl_upscale,SAMPLER_NAMES,SCHEDULER_NAMES,lora_lightning_list,pre_checkpoint,get_easy_function,sd35_loader)
-from .utils.gradio_utils import cal_attn_indice_xl_effcient_memory,is_torch2_available,process_original_prompt,get_ref_character,character_to_dict
-from .ip_adapter.attention_processor import IPAttnProcessor2_0
-if is_torch2_available():
-    from .utils.gradio_utils import AttnProcessor2_0 as AttnProcessor
-else:
-    from .utils.gradio_utils import AttnProcessor
 import torch.nn.functional as F
 import copy
 global total_count, attn_count, cur_step, mask1024, mask4096, attn_procs, unet
 global sa32, sa64
 global write
 global height_s, width_s
-
-import transformers
-try:
-    transformers_v=float(transformers.__version__.rsplit(".",1)[0])
-except:
-    transformers_v=float(transformers.__version__.rsplit(".",1)[0].rsplit(".",1)[0])
 
 photomaker_dir=os.path.join(folder_paths.models_dir, "photomaker")
 device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
@@ -53,8 +31,25 @@ fonts_lists = os.listdir(fonts_path)
 base_pt = os.path.join(photomaker_dir,"pt")
 if not os.path.exists(base_pt):
     os.makedirs(base_pt)
+
+def find_directories(base_path):
+    directories = []
+    for root, dirs, files in os.walk(base_path):
+        for name in dirs:
+            directories.append(name)
+    return directories
+
+
+SAMPLER_NAMES = ["euler", "euler_cfg_pp", "euler_ancestral", "euler_ancestral_cfg_pp", "heun", "heunpp2","dpm_2", "dpm_2_ancestral",
+                  "lms", "dpm_fast", "dpm_adaptive", "dpmpp_2s_ancestral", "dpmpp_2s_ancestral_cfg_pp", "dpmpp_sde", "dpmpp_sde_gpu",
+                  "dpmpp_2m", "dpmpp_2m_sde", "dpmpp_2m_sde_gpu", "dpmpp_3m_sde", "dpmpp_3m_sde_gpu", "ddpm", "lcm",
+                  "ipndm", "ipndm_v", "deis","ddim", "uni_pc", "uni_pc_bh2"]
+
+SCHEDULER_NAMES = ["normal", "karras", "exponential", "sgm_uniform", "simple", "ddim_uniform", "beta"]
     
 def set_attention_processor(unet, id_length, is_ipadapter=False):
+    from .ip_adapter.attention_processor import IPAttnProcessor2_0
+    from .utils.gradio_utils import AttnProcessor2_0 as AttnProcessor
     global attn_procs
     attn_procs = {}
     for name in unet.attn_processors.keys():
@@ -450,6 +445,8 @@ def process_generation(
         input_id_emb_s_dict, input_id_img_s_dict, input_id_emb_un_dict, input_id_cloth_dict, guidance, condition_image,
         empty_emb_zero, use_cf, cf_scheduler, controlnet_path, controlnet_scale, cn_dict,input_tag_dict,SD35_mode,use_wrapper,use_inf=None
 ):  # Corrected font_choice usage
+    
+    from .model_loader_utils import extract_content_from_brackets,remove_punctuation_from_strings, setup_seed, apply_style,apply_style_positive,lora_lightning_list
     
     if len(general_prompt.splitlines()) >= 3:
         raise "Support for more than three characters is temporarily unavailable due to VRAM limitations, but this issue will be resolved soon."
@@ -1370,6 +1367,16 @@ class Storydiffusion_Model_Loader:
     
     def story_model_loader(self,character_prompt, repo_id, ckpt_name, vae_id, character_weights, lora, lora_scale,controlnet_model, clip_vision,trigger_words,sampeler_name, scheduler,
                            sa32_degree, sa64_degree, width, height, photomake_mode, easy_function,**kwargs):
+        from diffusers import StableDiffusionXLPipeline, DiffusionPipeline,EulerDiscreteScheduler, UNet2DConditionModel,UniPCMultistepScheduler, AutoencoderKL
+        from transformers import CLIPVisionModelWithProjection
+        from transformers import CLIPImageProcessor
+        from .utils.load_models_utils import load_models
+        from .model_loader_utils import story_maker_loader,kolor_loader,get_scheduler,SD35Wrapper, nomarl_upscale,lora_lightning_list,pre_checkpoint,get_easy_function,sd35_loader
+        import transformers
+        try:
+            transformers_v=float(transformers.__version__.rsplit(".",1)[0])
+        except:
+            transformers_v=float(transformers.__version__.rsplit(".",1)[0].rsplit(".",1)[0])
         
         cf_model=kwargs.get("model")
         clip = kwargs.get("clip")
@@ -1891,6 +1898,8 @@ class Storydiffusion_Sampler:
                   cfg, denoise_or_ip_sacle, style_strength_ratio,
                   guidance, mask_threshold, start_step,save_character,controlnet_scale,guidance_list,**kwargs):
         # get value from dict
+        from diffusers import UniPCMultistepScheduler
+        from .model_loader_utils import story_maker_loader, extract_content_from_brackets,narry_list,remove_punctuation_from_strings,phi_list,center_crop_s,center_crop, setup_seed, apply_style,get_scheduler,load_images_list, nomarl_upscale,lora_lightning_list
         pipe=model.get("pipe")
         use_flux=model.get("use_flux")
         photomake_mode=model.get("photomake_mode")
@@ -2295,6 +2304,8 @@ class Comic_Type:
     CATEGORY = "Storydiffusion"
 
     def comic_gen(self, image, scene_prompts, fonts_list, text_size, comic_type, split_lines):
+        from .utils.utils import get_comic
+        from .model_loader_utils import phi2narry, narry_list_pil
         result = [item for index, item in enumerate(image)]
         total_results = narry_list_pil(result)
         font_choice = os.path.join(dir_path, "fonts", fonts_list)
