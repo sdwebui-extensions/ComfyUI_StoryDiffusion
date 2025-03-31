@@ -36,7 +36,10 @@ global write
 global height_s, width_s
 
 import transformers
-transformers_v=float(transformers.__version__.rsplit(".",1)[0])
+try:
+    transformers_v=float(transformers.__version__.rsplit(".",1)[0])
+except:
+    transformers_v=float(transformers.__version__.rsplit(".",1)[0].rsplit(".",1)[0])
 
 photomaker_dir=os.path.join(folder_paths.models_dir, "photomaker")
 device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
